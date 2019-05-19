@@ -58,6 +58,47 @@ router.post('/getTodos', function(req, res) {
     var qq = 'select * from todo where is_del = 0 order by regdate desc';
     var result = conn.query(qq);
     res.json(result);
-})
+});
+
+router.post('/doneTodo', function(req, res) {
+    var conn = new db(dbConf);
+    var qq = 'update todo set is_done = 1 where seq = '+req.body.seq;
+    conn.query(qq);
+    res.end();
+});
+
+router.post('/delTodo', function(req, res) {
+    var conn = new db(dbConf);
+    var qq = 'update todo set is_del = 1 where seq = '+req.body.seq;
+    conn.query(qq);
+    res.end();
+});
+
+router.post('/modTodo', function(req, res) {
+    var conn = new db(dbConf);
+    var deadline = req.body.deadline;
+    if (!deadline)
+        deadline = '9999-12-31';
+    deadline = new Date(deadline);
+    var check1 = req.body.check1;
+    if (!check1)
+        check1 = 'null';
+    var check2 = req.body.check2;
+    if (!check2)
+        check2 = 'null';
+    var check3 = req.body.check3;
+    if (!check3)
+        check3 = 'null';
+    var check4 = req.body.check4;
+    if (!check4)
+        check4 = 'null';
+    var check5 = req.body.check5;
+    if (!check5)
+        check5 = 'null';
+    var qq = "update todo set title = '"+req.body.title+"', memo = '"+req.body.memo+"', deadline = "+deadline.getTime()+", priority = "+req.body.priority+" where seq = "+req.body.seq;
+    console.log(qq);
+    conn.query(qq);
+    res.end();
+});
 
 module.exports = router;

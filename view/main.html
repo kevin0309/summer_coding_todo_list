@@ -32,6 +32,9 @@
     #to-do-list .list-group-item.expired {
         border: #f00 solid 2px;
     }
+    #to-do-list .list-group-item.done {
+        border: #0f0 solid 2px;
+    }
     #to-do-list .list-group-item.p-high {
         background: #ffc7c7;
     }
@@ -56,12 +59,16 @@
     .to-do-list-content.expired {
         color: #f00;
     }
+    .to-do-list-content.done {
+        color: #00c000;
+        text-decoration: line-through;
+    }
 	#list-up-btn, #list-down-btn {
 		border-radius: 50%; 
 		float: right; 
 		margin-top: -13px;
 	}
-	#add-todo-content {
+	#add-todo-content, #mod-todo-content {
 		resize: none;
 		border: none;
 		width: 100%;
@@ -103,16 +110,19 @@
                         var exp = '';
                         if (new Date(data[i].deadline).getTime() <= new Date().getTime())
                             exp = ' expired';
-                        this.addNewListElement(new Date(data[i].regdate).toLocaleDateString()+' '+new Date(data[i].regdate).toLocaleTimeString(), data[i].title, pr, exp);
+                        var done = '';
+                        if (data[i].is_done == 1)
+                            done = ' done';
+                        this.addNewListElement(new Date(data[i].regdate).toLocaleDateString()+' '+new Date(data[i].regdate).toLocaleTimeString(), data[i].title, pr, exp, done);
                     }
                 },
-                addNewListElement: function(dateStr, listContent, priority, expired) {
-                    var $li = $('<li class="list-group-item'+priority+expired+'" style="overflow: hidden; opacity: 0;" onclick="fnObj.viewTodo.openModal(this)"></li>');
+                addNewListElement: function(dateStr, listContent, priority, expired, done) {
+                    var $li = $('<li class="list-group-item'+priority+expired+done+'" style="overflow: hidden; opacity: 0;" onclick="fnObj.viewTodo.openModal(this)"></li>');
                     var $div = $('<div style="margin-top: -100%; transition: margin 0.7s ease 0s;"></div>');
                     var $dateSpan = $('<span class="list-date-text">'+dateStr+'</span>');
                     $div.append($dateSpan);
                     $div.append('<br>');
-                    var $contentSpan = $('<span class="to-do-list-content '+expired+'">'+listContent+'</span>');
+                    var $contentSpan = $('<span class="to-do-list-content'+expired+done+'">'+listContent+'</span>');
                     $div.append($contentSpan);
                     $li.append($div);
                     $('#to-do-list').append($li);
@@ -144,7 +154,10 @@
 			addTodo: {
 				initModal: function() {
 					fnObj.checkList.curListCnt = 0;
-					$('.checklist').empty();
+					$('#add-todo-modal .checklist').empty();
+					$('#add-todo-modal input[name=title]').val('');
+					$('#add-todo-modal input[name=deadline]').val('');
+                    $('#add-todo-modal select[name=priority] option:eq(1)').prop('selected', true);
 					$('#add-todo-content').val('');
 				},
 				openModal: function() {
@@ -173,23 +186,72 @@
 				}
 			},
 			viewTodo: {
+                curOpen: null,
 				initModal: function(target) {
-                    console.log(target);
 					$('#view-todo-title').text(target.title);
+					$('#view-todo-deadline').text(new Date(target.deadline).toLocaleDateString());
                     $('#view-todo-content').text(target.memo);
 					$('#view-todo-detail-modal').modal('show');
 				},
 				openModal: function(target) {
-					console.log(target);
-                    console.log($('#to-do-list').index(target));
-                    console.log($(target).index());
-                    console.log(fnObj.todoList.data[$(target).index()]);
                     var t = fnObj.todoList.data[$(target).index()];
-                    console.log('asdasd'+t);
+                    fnObj.viewTodo.curOpen = t;
 					fnObj.viewTodo.initModal(t);
 				},
+                modifyTodo: {
+                    initModal: function() {
+                        var data = fnObj.viewTodo.curOpen;
+                        var deadline = new Date(data.deadline);
+                        var deadlineStr = deadline.getFullYear()+'-'+(deadline.getMonth()+1)+'-'+deadline.getDate();
+                        $('#mod-todo-modal .checklist').empty();
+                        $('#mod-todo-modal input[name=title]').val(data.title);
+                        $('#mod-todo-modal input[name=deadline]').val(deadlineStr);
+                        $('#mod-todo-modal select[name=priority] option:eq('+(3-data.priority)+')').prop('selected', true);
+                        $('#mod-todo-content').val(data.memo);
+                    },
+                    openModal: function() {
+                        this.initModal();
+                        $('#mod-todo-modal').modal('show');
+                    },
+                    modRequest: function() {
+                        var param = {};
+                        param.seq = fnObj.viewTodo.curOpen.seq;
+                        param.title = $('#mod-todo-modal input[name=title]').val();
+                        if (!param.title) {
+                            alert('제목을 입력해주세요.');
+                            return;
+                        }
+                        param.deadline = $('#mod-todo-modal input[name=deadline]').val();
+                        param.priority = $('#mod-todo-modal select[name=priority]').val();
+                        param.memo = $('#mod-todo-content').val();
+                        var cnt = 1;
+                        $('#mod-todo-modal .checklist>div').each(function() {
+                            if ($(this).find('input[type=text]').val() != '')
+                                param['check'+cnt++] = $(this).find('input[type=text]').val();
+                        });
+                        $.post('/modTodo', param, function() {
+                            fnObj.todoList.getTodoList(true);
+                        });
+                        $('#mod-todo-modal').modal('hide');
+                    }
+                },
+				doneTodo: function() {
+                    if (confirm('Do you want to finish this To-do?')) {
+                        var param = {};
+                        param.seq = fnObj.viewTodo.curOpen.seq;
+                        $.post('/doneTodo', param, function() {
+                            fnObj.todoList.getTodoList(true);
+                        });
+                    }
+				},
 				deleteTodo: function() {
-					
+                    if (confirm('Do you want to delete this To-do?')) {
+                        var param = {};
+                        param.seq = fnObj.viewTodo.curOpen.seq;
+                        $.post('/delTodo', param, function() {
+                            fnObj.todoList.getTodoList(true);
+                        });
+                    }
 				}
 			}
 			
@@ -198,6 +260,11 @@
 </head>
 <body>
 <div class="container" style="">
+    <div id="indicator" style="position: absolute; top: 23px;">
+        background color -> Priority <span style="background: #ffc7c7">&nbsp;&nbsp;&nbsp;</span> : High / <span style="background: #ffffca">&nbsp;&nbsp;&nbsp;</span> : Mid / <span style="background: #adffad">&nbsp;&nbsp;&nbsp;</span> : Low
+        <br>
+        border -> <span style="background: #0f0">&nbsp;&nbsp;&nbsp;</span> : Done To-do / <span style="background: #f00">&nbsp;&nbsp;&nbsp;</span> : Expired To-do
+    </div>
 	<h1 style="text-align: center;">
 		YH To-do List
 		<button id="add-list-btn" class="btn btn-info btn-small" style="border-radius: 50%; float: right;" onclick="fnObj.addTodo.openModal();">+</button>
@@ -230,6 +297,32 @@
 		</div>
 	</div>
 </div>
+<div id="mod-todo-modal" class="modal fade" role="dialog">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal">&times;</button>
+				<h3 id="modalTitle" style="text-align: center;">Modify To-do</h3>
+			</div>
+			<div class="modal-body">
+                <input type="text" name="title" style="border: none;" placeholder=" title" autocomplete="off">
+                Deadline <input type="date" name="deadline">
+                Priority <select name="priority">
+                    <option value="3">High</option>
+                    <option value="2" selected="selected">Mid</option>
+                    <option value="1">Low</option>
+                </select>
+				<textarea id="mod-todo-content" placeholder="memo"></textarea>
+				<br>
+				<!-- <div class="checklist" style="padding: 20px;"></div>
+				<span style="font-weight: bold; cursor: pointer;" onclick="fnObj.checkList.addNewCheckList()">→ Click here to add check list element.</span> -->
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-info btn-small" onclick="fnObj.viewTodo.modifyTodo.modRequest();">Save</button>
+			</div>
+		</div>
+	</div>
+</div>
 <div id="view-todo-detail-modal" class="modal fade" role="dialog">
 	<div class="modal-dialog">
 		<div class="modal-content">
@@ -239,14 +332,15 @@
 			</div>
 			<div class="modal-body">
                 <div style="font-size: 1.5em;">Title: <span id="view-todo-title" style="font-size: 0.7em;"></span></div>
+                <div style="font-size: 1.5em;">Deadline: <span id="view-todo-deadline" style="font-size: 0.7em;"></span></div>
 				<div style="font-size: 1.5em; height: 30vh;">Memo: <span id="view-todo-content" style="font-size: 0.7em;"></span></div>
 				<br>
 				<div class="checklist" style="padding: 20px;"></div>
 			</div>
 			<div class="modal-footer">
-				<button type="button" class="btn btn-info btn-small" data-dismiss="modal" onclick="alert('mod');">Modify</button>
-                <button type="button" class="btn btn-success btn-small" data-dismiss="modal" onclick="alert('done');">Done</button>
-				<button type="button" class="btn btn-danger btn-small" data-dismiss="modal" onclick="alert('del');">Delete</button>
+				<button type="button" class="btn btn-info btn-small" data-dismiss="modal" onclick="fnObj.viewTodo.modifyTodo.openModal();">Modify</button>
+                <button type="button" class="btn btn-success btn-small" data-dismiss="modal" onclick="fnObj.viewTodo.doneTodo();">Done</button>
+				<button type="button" class="btn btn-danger btn-small" data-dismiss="modal" onclick="fnObj.viewTodo.deleteTodo();">Delete</button>
 			</div>
 		</div>
 	</div>
