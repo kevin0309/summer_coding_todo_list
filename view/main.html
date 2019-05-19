@@ -27,12 +27,22 @@
 	}
 	#to-do-list .list-group-item {
 		padding: 20px 20px 30px;
-		transition: background 0.3s ease 0s;
-		transition: opacity 0.5s ease 0s;
-		border-radius: 30px;
+		transition: background 0.3s ease 0s, opacity 0.5s ease 0s;
 	}
+    #to-do-list .list-group-item.expired {
+        border: #f00 solid 2px;
+    }
+    #to-do-list .list-group-item.p-high {
+        background: #ffc7c7;
+    }
+    #to-do-list .list-group-item.p-mid {
+        background: #ffffca;
+    }
+    #to-do-list .list-group-item.p-low {
+        background: #adffad;
+    }
 	#to-do-list .list-group-item:hover {
-		background: #d5f5ff;
+		background: #fff;
 	}
 	.list-date-text {
 		color: #aaa;
@@ -43,6 +53,9 @@
 		font-size: 1.3em;
 		cursor: pointer;
 	}
+    .to-do-list-content.expired {
+        color: #f00;
+    }
 	#list-up-btn, #list-down-btn {
 		border-radius: 50%; 
 		float: right; 
@@ -64,29 +77,56 @@
 </style>
 <script type="text/javascript">
 	$(document).ready(function() {
-		fnObj.addDummyListElement();
-	})
+		fnObj.todoList.getTodoList(true);
+	});
 	var fnObj = {
-			addNewListElement: function(dateStr, listContent) {
-				var $li = $('<li class="list-group-item" style="overflow: hidden; opacity: 0;" onclick="fnObj.viewTodo.openModal(this)"></li>');
-				var $div = $('<div style="margin-top: -100%; transition: margin 0.7s ease 0s;"></div>');
-				var $dateSpan = $('<span class="list-date-text">'+dateStr+'</span>');
-				$div.append($dateSpan);
-				$div.append('<br>');
-				var $contentSpan = $('<span class="to-do-list-content">'+listContent+'</span>');
-				$div.append($contentSpan);
-				$li.append($div);
-				$('#to-do-list').append($li);
-				setTimeout(function() {
-					$li.css('opacity', '1');
-					setTimeout(function() {
-						$div.css('margin-top', '0');
-					}, 100);
-				}, 100);
-				
-			},
+            todoList: {
+                data: null,
+                getTodoList: function(isFirst) {
+                    var _this = this;
+                    $.post('/getTodos', null, function(json) {
+                        _this.data = json;
+                        if (isFirst)
+                            _this.refreshList(json);
+                    })
+                },
+                refreshList: function(data) {
+                    $('#to-do-list').empty();
+                    for (var i = 0; i < data.length; i++) {
+                        var pr;
+                        if (data[i].priority == 3)
+                            pr = ' p-high';
+                        else if (data[i].priority == 2)
+                            pr = ' p-mid';
+                        else
+                            pr = ' p-low';
+                        var exp = '';
+                        if (new Date(data[i].deadline).getTime() <= new Date().getTime())
+                            exp = ' expired';
+                        this.addNewListElement(new Date(data[i].regdate).toLocaleDateString()+' '+new Date(data[i].regdate).toLocaleTimeString(), data[i].title, pr, exp);
+                    }
+                },
+                addNewListElement: function(dateStr, listContent, priority, expired) {
+                    var $li = $('<li class="list-group-item'+priority+expired+'" style="overflow: hidden; opacity: 0;" onclick="fnObj.viewTodo.openModal(this)"></li>');
+                    var $div = $('<div style="margin-top: -100%; transition: margin 0.7s ease 0s;"></div>');
+                    var $dateSpan = $('<span class="list-date-text">'+dateStr+'</span>');
+                    $div.append($dateSpan);
+                    $div.append('<br>');
+                    var $contentSpan = $('<span class="to-do-list-content '+expired+'">'+listContent+'</span>');
+                    $div.append($contentSpan);
+                    $li.append($div);
+                    $('#to-do-list').append($li);
+                    setTimeout(function() {
+                        $li.css('opacity', '1');
+                        setTimeout(function() {
+                            $div.css('margin-top', '0');
+                        }, 100);
+                    }, 100);
+
+                }
+            },
 			addDummyListElement: function() {
-				this.addNewListElement('2019년 5월 19일 12:00:00', 'To do');
+				this.todoList.addNewListElement('2019년 5월 19일 12:00:00', 'To do', 'p-mid', '');
 			},
 			checkList : {
 				curListCnt: 0,
@@ -112,17 +152,41 @@
 					$('#add-todo-modal').modal('show');
 				},
 				addRequest: function() {
-					fnObj.addDummyListElement();
+					var param = {};
+                    param.title = $('#add-todo-modal input[name=title]').val();
+                    if (!param.title) {
+                        alert('제목을 입력해주세요.');
+                        return;
+                    }
+                    param.deadline = $('#add-todo-modal input[name=deadline]').val();
+                    param.priority = $('#add-todo-modal select[name=priority]').val();
+					param.memo = $('#add-todo-content').val();
+					var cnt = 1;
+					$('#add-todo-modal .checklist>div').each(function() {
+						if ($(this).find('input[type=text]').val() != '')
+							param['check'+cnt++] = $(this).find('input[type=text]').val();
+					});
+					$.post('/addTodo', param, function() {
+						fnObj.todoList.getTodoList(true);
+					});
+					$('#add-todo-modal').modal('hide');
 				}
 			},
 			viewTodo: {
-				initModal: function() {
-					
+				initModal: function(target) {
+                    console.log(target);
+					$('#view-todo-title').text(target.title);
+                    $('#view-todo-content').text(target.memo);
+					$('#view-todo-detail-modal').modal('show');
 				},
 				openModal: function(target) {
-					this.initModal();
-					$('#view-todo-detail-modal').modal('show');
 					console.log(target);
+                    console.log($('#to-do-list').index(target));
+                    console.log($(target).index());
+                    console.log(fnObj.todoList.data[$(target).index()]);
+                    var t = fnObj.todoList.data[$(target).index()];
+                    console.log('asdasd'+t);
+					fnObj.viewTodo.initModal(t);
 				},
 				deleteTodo: function() {
 					
@@ -133,9 +197,9 @@
 </script>
 </head>
 <body>
-<div class="container" style="background: #ff00f1;">
-	<h1 style="text-align: center; color: #fff;">
-		To-do List
+<div class="container" style="">
+	<h1 style="text-align: center;">
+		YH To-do List
 		<button id="add-list-btn" class="btn btn-info btn-small" style="border-radius: 50%; float: right;" onclick="fnObj.addTodo.openModal();">+</button>
 	</h1>
 	<ul id="to-do-list" class="list-group"></ul>
@@ -148,13 +212,20 @@
 				<h3 id="modalTitle" style="text-align: center;">Add new To-do</h3>
 			</div>
 			<div class="modal-body">
+                <input type="text" name="title" style="border: none;" placeholder=" title" autocomplete="off">
+                Deadline <input type="date" name="deadline">
+                Priority <select name="priority">
+                    <option value="3">High</option>
+                    <option value="2" selected="selected">Mid</option>
+                    <option value="1">Low</option>
+                </select>
 				<textarea id="add-todo-content" placeholder="memo"></textarea>
 				<br>
-				<div class="checklist" style="padding: 20px;"></div>
-				<span style="font-weight: bold; cursor: pointer;" onclick="fnObj.checkList.addNewCheckList()">→ Add check list element.</span>
+				<!-- <div class="checklist" style="padding: 20px;"></div>
+				<span style="font-weight: bold; cursor: pointer;" onclick="fnObj.checkList.addNewCheckList()">→ Click here to add check list element.</span> -->
 			</div>
 			<div class="modal-footer">
-				<button type="button" class="btn btn-info btn-small" data-dismiss="modal" onclick="fnObj.addTodo.addRequest();">Save</button>
+				<button type="button" class="btn btn-info btn-small" onclick="fnObj.addTodo.addRequest();">Save</button>
 			</div>
 		</div>
 	</div>
@@ -167,12 +238,14 @@
 				<h3 id="modalTitle" style="text-align: center;">To-do detail</h3>
 			</div>
 			<div class="modal-body">
-				<div id="view-todo-content"></div>
+                <div style="font-size: 1.5em;">Title: <span id="view-todo-title" style="font-size: 0.7em;"></span></div>
+				<div style="font-size: 1.5em; height: 30vh;">Memo: <span id="view-todo-content" style="font-size: 0.7em;"></span></div>
 				<br>
 				<div class="checklist" style="padding: 20px;"></div>
 			</div>
 			<div class="modal-footer">
 				<button type="button" class="btn btn-info btn-small" data-dismiss="modal" onclick="alert('mod');">Modify</button>
+                <button type="button" class="btn btn-success btn-small" data-dismiss="modal" onclick="alert('done');">Done</button>
 				<button type="button" class="btn btn-danger btn-small" data-dismiss="modal" onclick="alert('del');">Delete</button>
 			</div>
 		</div>

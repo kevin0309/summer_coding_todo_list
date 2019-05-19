@@ -1,6 +1,9 @@
 var express = require('express');
-var path = require('path');
+//var path = require('path');
 var app = express();
+var bodyParser = require('body-parser');
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 var homeRouter = require('./router/home');
 app.set('views', __dirname + '/view');
 //app.set('view engine', 'html');
