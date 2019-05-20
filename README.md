@@ -1,5 +1,5 @@
 # summer_coding_todo_list
-## Install command on Linux OS
+## Install and run command on Linux OS
 1. git clone https://github.com/kevin0309/summer_coding_todo_list.git
 2. cd summer_coding_todo_list/
 3. npm install
